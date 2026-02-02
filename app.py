@@ -5,6 +5,12 @@ st.title("🤖 나의 AI 챗봇")
 
 # 사이드바에서 API Key 입력
 api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+# 사이드바에서 기분 선택
+mood = st.sidebar.selectbox(
+    "현재 기분을 선택하세요",
+    ["행복해요", "보통이에요", "피곤해요", "스트레스 받아요", "설레요", "슬퍼요"],
+)
+st.session_state.mood = mood
 
 # 대화 기록 초기화
 if "messages" not in st.session_state:
@@ -30,7 +36,10 @@ if prompt := st.chat_input("메시지를 입력하세요"):
             client = OpenAI(api_key=api_key)
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
-                messages=st.session_state.messages
+                messages=[
+                    {"role": "system", "content": f"사용자의 현재 기분은 '{mood}'입니다."},
+                    *st.session_state.messages,
+                ],
             )
             reply = response.choices[0].message.content
             st.markdown(reply)
