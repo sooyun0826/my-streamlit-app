@@ -1,79 +1,83 @@
-import requests
 import streamlit as st
 
-st.title("🎬 심리테스트 기반 영화 추천")
+st.set_page_config(page_title="나와 어울리는 영화는?", page_icon="🎬", layout="centered")
 
-st.write(
-    """
-    간단한 심리테스트로 당신의 현재 분위기를 파악하고, 그에 어울리는 영화를 추천해 드립니다.
-    아래 질문에 답변한 뒤 추천 버튼을 눌러주세요.
-    """
-)
+# 제목 & 소개
+st.title("🎬 나와 어울리는 영화는?")
+st.write("5가지 질문에 답하면, 당신의 영화 취향 성향을 바탕으로 어울리는 영화 타입을 찾아드려요! 🎞️🍿")
+st.caption("※ 지금은 화면/흐름만 구현되어 있고, 결과 분석(API 연동)은 다음 시간에 붙일 예정입니다.")
 
-# 사이드바에서 API 키 입력
-TMDB_API_KEY = st.sidebar.text_input("TMDB API Key", type="password")
+st.divider()
 
-questions = {
-    "오늘 당신의 에너지는 어떤가요?": [
-        "활력이 넘쳐요!",
-        "평범해요.",
-        "조용히 쉬고 싶어요.",
-    ],
-    "지금 가장 끌리는 감정은 무엇인가요?": [
-        "설렘",
-        "감동",
-        "웃음",
-    ],
-    "오늘의 분위기에 어울리는 장소는?": [
-        "도시의 밤거리",
-        "아늑한 집",
-        "자연 속 풍경",
-    ],
-}
+# 질문 & 선택지 (장르 성향을 반영)
+questions = [
+    {
+        "q": "Q1. 시험이 끝난 날, 드디어 하루가 비었다. 지금 가장 하고 싶은 건?",
+        "options": [
+            "A. 잔잔한 음악 틀어두고 카페에 앉아 하루를 정리한다 (로맨스/드라마)",
+            "B. 친구들이랑 즉흥 여행이나 액티비티를 바로 잡는다 (액션/어드벤처)",
+            "C. 집에서 영화·드라마 몰아보며 다른 세계로 도피한다 (SF/판타지)",
+            "D. 아무 생각 안 나게 웃긴 콘텐츠부터 찾아본다 (코미디)",
+        ],
+    },
+    {
+        "q": "Q2. 팀플이 끝났을 때, 당신이 가장 중요하게 생각하는 건?",
+        "options": [
+            "A. 과정에서 서로 상처받지 않았는지, 분위기가 좋았는지 (로맨스/드라마)",
+            "B. 결과물의 완성도와 성과 (액션/어드벤처)",
+            "C. 아이디어의 새로움과 컨셉의 독창성 (SF/판타지)",
+            "D. 회의하면서 웃긴 에피소드가 남았는지 (코미디)",
+        ],
+    },
+    {
+        "q": "Q3. 새 학기가 시작됐다. 당신이 은근히 기대하는 건?",
+        "options": [
+            "A. 사람들과 자연스럽게 가까워지는 순간들 (로맨스/드라마)",
+            "B. 새로운 도전, 바빠질수록 살아있다는 느낌 (액션/어드벤처)",
+            "C. 완전히 새로운 환경과 세계관 같은 전공/수업 (SF/판타지)",
+            "D. 예상치 못한 웃긴 사람들과의 만남 (코미디)",
+        ],
+    },
+    {
+        "q": "Q4. 영화 속 주인공이 된다면, 이 중 가장 끌리는 역할은?",
+        "options": [
+            "A. 관계 속에서 성장하고 감정을 깊이 겪는 인물 (로맨스/드라마)",
+            "B. 위기마다 몸으로 돌파하는 해결사 (액션/어드벤처)",
+            "C. 세계의 비밀을 파헤치는 선택받은 존재 (SF/판타지)",
+            "D. 사건을 더 꼬이게 만들지만 결국 분위기를 살리는 인물 (코미디)",
+        ],
+    },
+    {
+        "q": "Q5. 힘든 하루 끝, 영화 한 편을 고른다면 기준은?",
+        "options": [
+            "A. 여운이 오래 남고 생각할 거리를 주는 이야기 (로맨스/드라마)",
+            "B. 속도감 있고 몰입해서 스트레스가 풀리는 전개 (액션/어드벤처)",
+            "C. 현실을 잠시 잊게 만드는 설정과 비주얼 (SF/판타지)",
+            "D. 그냥 아무 생각 없이 웃을 수 있는지 (코미디)",
+        ],
+    },
+]
 
-genre_mapping = {
-    ("활력이 넘쳐요!", "설렘", "도시의 밤거리"): (28, "액션"),
-    ("활력이 넘쳐요!", "웃음", "도시의 밤거리"): (35, "코미디"),
-    ("활력이 넘쳐요!", "감동", "자연 속 풍경"): (12, "어드벤처"),
-    ("평범해요.", "설렘", "도시의 밤거리"): (10749, "로맨스"),
-    ("평범해요.", "웃음", "아늑한 집"): (35, "코미디"),
-    ("평범해요.", "감동", "아늑한 집"): (18, "드라마"),
-    ("조용히 쉬고 싶어요.", "감동", "아늑한 집"): (18, "드라마"),
-    ("조용히 쉬고 싶어요.", "설렘", "자연 속 풍경"): (14, "판타지"),
-    ("조용히 쉬고 싶어요.", "웃음", "아늑한 집"): (35, "코미디"),
-}
-
+# 사용자 응답 저장
 answers = []
-for question, options in questions.items():
-    answers.append(st.radio(question, options, horizontal=True))
 
-if TMDB_API_KEY:
-    if st.button("심리테스트 결과로 영화 추천 받기"):
-        selected_key = tuple(answers)
-        genre_id, genre_label = genre_mapping.get(selected_key, (18, "드라마"))
+for idx, item in enumerate(questions, start=1):
+    st.subheader(f"질문 {idx}")
+    choice = st.radio(
+        item["q"],
+        item["options"],
+        index=None,  # 아무 것도 선택 안 한 상태 허용
+        key=f"q{idx}",
+    )
+    answers.append(choice)
+    st.write("")  # spacing
 
-        st.subheader(f"🎯 추천 장르: {genre_label}")
-        url = (
-            "https://api.themoviedb.org/3/discover/movie"
-            f"?api_key={TMDB_API_KEY}"
-            "&language=ko-KR"
-            f"&with_genres={genre_id}"
-            "&sort_by=popularity.desc"
-        )
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-        movies = data.get("results", [])[:3]
+st.divider()
 
-        if not movies:
-            st.warning("추천할 영화를 찾지 못했어요. 다른 답변으로 다시 시도해 주세요.")
-        else:
-            st.markdown("### 🌟 우선순위별 추천 영화 3편")
-            for idx, movie in enumerate(movies, start=1):
-                st.markdown(f"#### {idx}순위: {movie['title']}")
-                st.write(f"⭐ 평점: {movie['vote_average']}/10")
-                st.write(f"📅 개봉일: {movie['release_date']}")
-                st.write(f"📝 줄거리: {movie['overview'][:120]}...")
-                st.divider()
-else:
-    st.info("사이드바에 TMDB API Key를 입력해주세요.")
+# 결과 보기 버튼
+if st.button("결과 보기", type="primary", use_container_width=True):
+    # 미선택 질문 체크(선택 안 했으면 안내)
+    if any(a is None for a in answers):
+        st.warning("모든 질문에 답해줘야 결과를 볼 수 있어요! 😊")
+    else:
+        st.info("분석 중...")
