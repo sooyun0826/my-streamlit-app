@@ -1,13 +1,42 @@
+from collections import Counter
+from typing import Dict, List
+
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="나와 어울리는 영화는?", page_icon="🎬", layout="centered")
 
+st.markdown(
+    """
+    <style>
+    .poster-frame {
+        border: 6px solid #f0f0f0;
+        border-radius: 16px;
+        padding: 8px;
+        background: #ffffff;
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+        width: fit-content;
+    }
+    .poster-frame img {
+        display: block;
+        border-radius: 12px;
+        max-width: 320px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # 제목 & 소개
 st.title("🎬 나와 어울리는 영화는?")
 st.write("5가지 질문에 답하면, 당신의 영화 취향 성향을 바탕으로 어울리는 영화 타입을 찾아드려요! 🎞️🍿")
-st.caption("※ 지금은 화면/흐름만 구현되어 있고, 결과 분석(API 연동)은 다음 시간에 붙일 예정입니다.")
 
 st.divider()
+
+with st.sidebar:
+    st.header("TMDB 설정")
+    api_key = st.text_input("TMDB API Key", type="password")
+    st.caption("TMDB에서 발급받은 API Key를 입력하세요.")
 
 # 질문 & 선택지 (장르 성향을 반영)
 questions = [
@@ -58,6 +87,32 @@ questions = [
     },
 ]
 
+GENRE_OPTIONS = {
+    "A": "로맨스",
+    "B": "액션",
+    "C": "SF",
+    "D": "코미디",
+}
+
+GENRE_IDS = {
+    "액션": 28,
+    "코미디": 35,
+    "드라마": 18,
+    "SF": 878,
+    "로맨스": 10749,
+    "판타지": 14,
+}
+
+GENRE_REASON = {
+    "액션": "스릴과 속도감이 있는 전개를 즐기는 선택이 많았어요.",
+    "코미디": "웃음과 가벼운 분위기를 선호하는 답변이 눈에 띄었어요.",
+    "드라마": "감정선과 깊은 여운을 중시하는 성향이 드러났어요.",
+    "SF": "새로운 세계관과 상상력을 즐기는 답변이 많았어요.",
+    "로맨스": "관계와 감정의 흐름을 중요하게 생각하는 모습이에요.",
+    "판타지": "현실을 넘어서는 서사에 끌리는 선택이 두드러졌어요.",
+}
+
+
 # 사용자 응답 저장
 answers = []
 
@@ -74,10 +129,99 @@ for idx, item in enumerate(questions, start=1):
 
 st.divider()
 
+
+def analyze_answers(selected: List[str]) -> str:
+    counts: Counter[str] = Counter()
+    for answer in selected:
+        label = answer.split(".")[0].strip()
+        genre = GENRE_OPTIONS.get(label)
+        if genre:
+            counts[genre] += 1
+
+    if not counts:
+        return "드라마"
+
+    max_score = max(counts.values())
+    top_genres = [genre for genre, score in counts.items() if score == max_score]
+    priority = ["로맨스", "드라마", "액션", "SF", "판타지", "코미디"]
+    for genre in priority:
+        if genre in top_genres:
+            return genre
+    return top_genres[0]
+
+
+def fetch_movies(api_key_value: str, genre_id: int) -> List[Dict[str, str]]:
+    response = requests.get(
+        "https://api.themoviedb.org/3/discover/movie",
+        params={
+            "api_key": api_key_value,
+            "with_genres": genre_id,
+            "language": "ko-KR",
+            "sort_by": "popularity.desc",
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    results = response.json().get("results", [])
+    return results[:5]
+
+
 # 결과 보기 버튼
 if st.button("결과 보기", type="primary", use_container_width=True):
     # 미선택 질문 체크(선택 안 했으면 안내)
     if any(a is None for a in answers):
         st.warning("모든 질문에 답해줘야 결과를 볼 수 있어요! 😊")
+    elif not api_key:
+        st.warning("사이드바에 TMDB API Key를 입력해주세요!")
     else:
-        st.info("분석 중...")
+        with st.spinner("답변을 분석하고 추천 영화를 찾고 있어요..."):
+            selected_genre = analyze_answers(answers)
+            genre_id = GENRE_IDS.get(selected_genre, GENRE_IDS["드라마"])
+            try:
+                movies = fetch_movies(api_key, genre_id)
+            except requests.RequestException:
+                st.error("TMDB API 호출에 실패했습니다. API Key를 확인해주세요.")
+                st.stop()
+
+        st.subheader(f"당신의 추천 장르: {selected_genre}")
+        st.write(GENRE_REASON.get(selected_genre, "당신의 취향에 맞춘 추천입니다."))
+        st.divider()
+
+        if not movies:
+            st.info("추천할 영화가 아직 없어요. 잠시 후 다시 시도해주세요.")
+        else:
+            for movie in movies:
+                title = movie.get("title") or movie.get("name") or "제목 없음"
+                rating = movie.get("vote_average")
+                overview = movie.get("overview") or "줄거리 정보가 없습니다."
+                poster_path = movie.get("poster_path")
+                poster_url = (
+                    f"https://image.tmdb.org/t/p/w500{poster_path}" if poster_path else None
+                )
+
+                st.markdown(f"### {title}")
+                if rating is not None:
+                    st.write(f"⭐ 평점: {rating:.1f}")
+                else:
+                    st.write("⭐ 평점: 정보 없음")
+
+                cols = st.columns([1, 2])
+                with cols[0]:
+                    if poster_url:
+                        st.markdown(
+                            f"""
+                            <div class="poster-frame">
+                                <img src="{poster_url}" alt="{title} 포스터" />
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.write("포스터가 없습니다.")
+                with cols[1]:
+                    st.write(overview)
+                    st.write(
+                        f"이 영화를 추천하는 이유: {GENRE_REASON.get(selected_genre, '당신의 선택과 잘 어울려요!')}"
+                    )
+
+                st.divider()
