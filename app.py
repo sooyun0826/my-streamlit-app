@@ -150,9 +150,14 @@ if TMDB_API_KEY:
             f"&with_genres={genre_id}"
             "&sort_by=popularity.desc"
         )
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            data = response.json()
+        except requests.exceptions.RequestException as exc:
+            st.error(f"TMDB API 요청에 실패했어요: {exc}")
+            st.stop()
+
         raw_movies = data.get("results", [])
         scored_movies = []
         for movie in raw_movies:
@@ -174,13 +179,19 @@ if TMDB_API_KEY:
         else:
             st.markdown("### 🌟 우선순위별 추천 영화 3편")
             for idx, movie in enumerate(movies, start=1):
-                st.markdown(f"#### {idx}순위: {movie['title']}")
+                title = movie.get("title") or "제목 정보 없음"
+                st.markdown(f"#### {idx}순위: {title}")
                 poster_path = movie.get("poster_path")
                 if poster_path:
                     poster_url = f"https://image.tmdb.org/t/p/w500{poster_path}"
-                    st.image(poster_url, caption=movie["title"], use_container_width=True)
-                st.write(f"⭐ 평점: {movie['vote_average']}/10")
-                st.write(f"📅 개봉일: {movie['release_date']}")
+                    st.image(poster_url, caption=title, use_container_width=True)
+                rating = movie.get("vote_average")
+                release_date = movie.get("release_date") or "개봉일 정보 없음"
+                if rating is not None:
+                    st.write(f"⭐ 평점: {rating}/10")
+                else:
+                    st.write("⭐ 평점 정보 없음")
+                st.write(f"📅 개봉일: {release_date}")
                 overview = movie.get("overview") or "줄거리 정보가 없습니다."
                 st.write(f"📝 줄거리: {overview}")
                 st.divider()
