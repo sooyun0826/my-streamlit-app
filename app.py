@@ -43,40 +43,38 @@ genre_options = {
     "애니메이션": 16,
 }
 
-companion_genre_boost = {
-    "가족": [10751, 16],
-    "친구": [35, 12],
-    "애인": [10749, 18],
-    "직장동료": [18, 35],
-    "지인": [9648, 53],
-}
-
-group_size_genre_boost = {
-    "혼자": [9648, 18],
-    "2인": [10749, 18],
-    "3~4인": [35, 12],
-    "그 이상의 단체 관람": [28, 12],
-}
-
-season_genre_boost = {
-    "봄": [10749, 14],
-    "여름": [12, 28],
-    "가을": [18, 9648],
-    "겨울": [14, 10751],
-}
-
-age_group_genre_boost = {
-    "10대 이하": [16, 12],
-    "20대": [28, 35],
-    "30대": [18, 10749],
-    "40대": [18, 9648],
-    "50대 이상": [10751, 18],
-}
-
-time_slot_genre_boost = {
-    "오전": [16, 35],
-    "오후": [12, 28],
-    "저녁": [18, 53],
+context_options = {
+    "누구랑 볼지": {
+        "가족": [10751, 16],
+        "친구": [35, 12],
+        "애인": [10749, 18],
+        "직장동료": [18, 35],
+        "지인": [9648, 53],
+    },
+    "몇 명과 볼지": {
+        "혼자": [9648, 18],
+        "2인": [10749, 18],
+        "3~4인": [35, 12],
+        "그 이상의 단체 관람": [28, 12],
+    },
+    "계절": {
+        "봄": [10749, 14],
+        "여름": [12, 28],
+        "가을": [18, 9648],
+        "겨울": [14, 10751],
+    },
+    "관람 연령대": {
+        "10대 이하": [16, 12],
+        "20대": [28, 35],
+        "30대": [18, 10749],
+        "40대": [18, 9648],
+        "50대 이상": [10751, 18],
+    },
+    "시청 시간대": {
+        "오전": [16, 35],
+        "오후": [12, 28],
+        "저녁": [18, 53],
+    },
 }
 
 genre_mapping = {
@@ -91,39 +89,14 @@ genre_mapping = {
     ("조용히 쉬고 싶어요.", "웃음", "아늑한 집"): (35, "코미디"),
 }
 
-answers = []
-for question, options in questions.items():
-    answers.append(st.radio(question, options, horizontal=True))
+answers = [st.radio(question, options, horizontal=True) for question, options in questions.items()]
 
-preferred_genre = st.selectbox(
-    "원하는 영화 장르를 선택해주세요.",
-    list(genre_options.keys()),
-)
+preferred_genre = st.selectbox("원하는 영화 장르를 선택해주세요.", list(genre_options.keys()))
 
-companion = st.selectbox(
-    "누구랑 볼지 선택해주세요.",
-    list(companion_genre_boost.keys()),
-)
-
-group_size = st.selectbox(
-    "몇 명과 볼지 선택해주세요.",
-    list(group_size_genre_boost.keys()),
-)
-
-season = st.selectbox(
-    "현재 계절을 선택해주세요.",
-    list(season_genre_boost.keys()),
-)
-
-age_group = st.selectbox(
-    "관람하는 사람의 연령대를 선택해주세요.",
-    list(age_group_genre_boost.keys()),
-)
-
-time_slot = st.selectbox(
-    "영화를 시청할 시간대를 선택해주세요.",
-    list(time_slot_genre_boost.keys()),
-)
+context_selections = {
+    label: st.selectbox(f"{label} 선택해주세요.", list(options.keys()))
+    for label, options in context_options.items()
+}
 
 if TMDB_API_KEY:
     if st.button("심리테스트 결과로 영화 추천 받기"):
@@ -135,11 +108,8 @@ if TMDB_API_KEY:
             genre_label = preferred_genre
 
         boosted_genres = []
-        boosted_genres.extend(companion_genre_boost.get(companion, []))
-        boosted_genres.extend(group_size_genre_boost.get(group_size, []))
-        boosted_genres.extend(season_genre_boost.get(season, []))
-        boosted_genres.extend(age_group_genre_boost.get(age_group, []))
-        boosted_genres.extend(time_slot_genre_boost.get(time_slot, []))
+        for label, selection in context_selections.items():
+            boosted_genres.extend(context_options[label][selection])
         boosted_genres = list(dict.fromkeys(boosted_genres))
 
         st.subheader(f"🎯 추천 장르: {genre_label}")
